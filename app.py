@@ -120,7 +120,7 @@ if quote_submit:
     if quote is not None:
         st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
 
-        # Show next step: Intake + Scheduling
+        # Step 2: Intake & Scheduling (revealed after quote)
         st.header("Step 2: Customer Details + Scheduling")
 
         with st.form("intake_form"):
@@ -130,7 +130,12 @@ if quote_submit:
 
             st.markdown("### Schedule Delivery")
             delivery_date = st.date_input("Preferred Delivery Date")
-            delivery_time = st.time_input("Preferred Delivery Time")
+            formatted_date = delivery_date.strftime("%A %m/%d/%Y")
+
+            delivery_time_pref = st.selectbox(
+                "Preferred Delivery Time",
+                ["AM", "PM", "Doesn't Matter"]
+            )
 
             confirm = st.form_submit_button("Send Confirmation Email")
 
@@ -148,7 +153,7 @@ if quote_submit:
             Distance: {mileage:.1f} miles roundtrip
             Notes: {notes}
 
-            Scheduled for: {delivery_date} at {delivery_time}
+            Scheduled for: {formatted_date} — {delivery_time_pref}
             """
             send_email(full_message)
             st.success("Confirmation email sent!")
