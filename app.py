@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import math
 import smtplib
 from email.mime.text import MIMEText
 
@@ -103,20 +102,25 @@ def send_email(data):
 
 # -------------------- UI -------------------- #
 
-st.title("📦 Wilson Plant Co. Delivery Quote Tool")
+st.title("Wilson Plant Co. Delivery Quote Tool")
 
-# Step 1: Quote
-st.header("Step 1: Delivery Quote")
+# Step 1 & Step 2 combined flow
+st.header("Step 1 & 2: Delivery Quote + Customer Intake")
 
-with st.form("quote_form"):
+with st.form("quote_and_intake_form"):
+    # Step 1 inputs
     customer_address = st.text_input("Customer's Full Address")
     delivery_origin_label = st.selectbox("Select Delivery Origin", ["Frankfort Store", "Lexington Store"])
     delivery_origin = FRANKFORT_ADDRESS if delivery_origin_label == "Frankfort Store" else LEXINGTON_ADDRESS
     delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
     add_on = st.selectbox("Add-On Options (optional)", ["None", "To-The-Hole"])
-    quote_requested = st.form_submit_button("Calculate Quote")
 
-quote_accepted = False
+    # Step 2 inputs (intake)
+    customer_name = st.text_input("Customer Name")
+    phone = st.text_input("Phone Number")
+    notes = st.text_area("Gate codes, location notes, or special instructions")
+
+    quote_requested = st.form_submit_button("Calculate Quote")
 
 if quote_requested:
     add_on_option = add_on if add_on != "None" else None
@@ -124,46 +128,44 @@ if quote_requested:
 
     if quote is not None:
         st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
-        quote_accepted = st.checkbox("✅ Customer accepts this quote")
-        if not quote_accepted:
-            st.info("Quote not accepted. No further action needed.")
+
+        # Store intake info for later steps
+        st.session_state["customer_name"] = customer_name
+        st.session_state["phone"] = phone
+        st.session_state["notes"] = notes
+        st.session_state["quote"] = quote
+        st.session_state["mileage"] = mileage
+        st.session_state["delivery_origin_label"] = delivery_origin_label
+        st.session_state["customer_address"] = customer_address
+        st.session_state["delivery_type"] = delivery_type
+        st.session_state["add_on_option"] = add_on_option
+
     else:
         st.error("Could not calculate delivery. Please check the address or delivery type.")
 
-# Step 2: Intake
-if quote_accepted:
-    st.header("Step 2: Customer Intake")
-
-    with st.form("intake_form"):
-        customer_name = st.text_input("Customer Name")
-        phone = st.text_input("Phone Number")
-        notes = st.text_area("Gate codes, location notes, or special instructions")
-        intake_submitted = st.form_submit_button("Save Intake Info")
-
-    if intake_submitted:
-        st.success("Customer details saved.")
-
-# Step 3: Scheduling
+# Only show Step 3 & 4 if quote calculation succeeded
+if quote_requested and "quote" in st.session_state:
+    # Step 3: Scheduling
     st.header("Step 3: Schedule Delivery")
     st.warning("Google Calendar integration coming soon. Please select manually.")
     delivery_date = st.date_input("Preferred Delivery Date")
     delivery_time = st.time_input("Preferred Delivery Time")
 
-# Step 4: Send Notification
+    # Step 4: Send Notification
     st.header("Step 4: Send Notification")
     if st.button("Send Confirmation Email"):
         full_message = f"""
         NEW DELIVERY BOOKED:
 
-        Name: {customer_name}
-        Phone: {phone}
-        Address: {customer_address}
-        Origin: {delivery_origin_label}
-        Type: {delivery_type}
-        Add-On: {add_on_option or "None"}
-        Quote: ${quote:.2f}
-        Distance: {mileage:.1f} miles roundtrip
-        Notes: {notes}
+        Name: {st.session_state['customer_name']}
+        Phone: {st.session_state['phone']}
+        Address: {st.session_state['customer_address']}
+        Origin: {st.session_state['delivery_origin_label']}
+        Type: {st.session_state['delivery_type']}
+        Add-On: {st.session_state['add_on_option'] or "None"}
+        Quote: ${st.session_state['quote']:.2f}
+        Distance: {st.session_state['mileage']:.1f} miles roundtrip
+        Notes: {st.session_state['notes']}
 
         Scheduled for: {delivery_date} at {delivery_time}
         """
