@@ -119,4 +119,47 @@ if quote_requested:
         quote_accepted = st.checkbox("✅ Customer accepts this quote")
 
         if not quote_accepted:
-            st.info("Quote not accepted.
+            st.info("Quote not accepted. No further action needed.")
+    else:
+        st.error("Could not calculate delivery. Address may be invalid or outside service area.")
+
+# Step 2: Intake (Only if quote accepted)
+if "quote_accepted" in locals() and quote_accepted:
+    st.header("Step 2: Customer Intake")
+
+    with st.form("intake_form"):
+        customer_name = st.text_input("Customer Name")
+        phone = st.text_input("Phone Number")
+        notes = st.text_area("Gate codes, location notes, or special instructions")
+        intake_submitted = st.form_submit_button("Save Intake Info")
+
+    if intake_submitted:
+        st.success("Customer details saved.")
+
+# Step 3: Scheduling (Placeholder for Google Calendar integration)
+    st.header("Step 3: Schedule Delivery")
+    st.warning("Google Calendar integration coming soon. Select date/time manually for now.")
+    delivery_date = st.date_input("Preferred Delivery Date")
+    delivery_time = st.time_input("Preferred Delivery Time")
+
+# Step 4: Send Notification
+    st.header("Step 4: Send Notification")
+    if st.button("Send Confirmation Email"):
+        full_message = f"""
+        NEW DELIVERY BOOKED:
+
+        Name: {customer_name}
+        Phone: {phone}
+        Address: {customer_address}
+        Origin: {origin_address}
+        Type: {delivery_type}
+        Add-On: {add_on_option or "None"}
+        Quote: ${quote:.2f}
+        Distance: {mileage:.1f} miles roundtrip
+        Notes: {notes}
+
+        Scheduled for: {delivery_date} at {delivery_time}
+        """
+        send_email(full_message)
+        st.success("Confirmation email sent!")
+
