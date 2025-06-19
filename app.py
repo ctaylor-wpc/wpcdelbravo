@@ -6,16 +6,6 @@ from email.mime.text import MIMEText
 
 # -------------------- CONFIGURATION -------------------- #
 
-# Streamlit secrets should hold:
-# [api]
-# google_maps_api_key = "YOUR_GOOGLE_API_KEY"
-# [email]
-# smtp_server = "smtp.gmail.com"
-# smtp_port = 587
-# sender_email = "your_email@gmail.com"
-# sender_password = "your_app_password"
-# notify_email = "team@yourcompany.com"
-
 API_KEY = st.secrets["api"]["google_maps_api_key"]
 EMAIL_CONFIG = st.secrets["email"]
 
@@ -32,14 +22,30 @@ def get_distance_miles(origin, destination):
         "key": API_KEY,
         "units": "imperial"
     }
-    response = requests.get(url, params=params)
-    data = response.json()
-    
+
     try:
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            st.error(f"Google Maps API request failed with status code {response.status_code}.")
+            return None
+
+        data = response.json()
+
+        if data["status"] != "OK":
+            st.error(f"Google Maps API error: {data.get('error_message', 'Unknown error')}")
+            return None
+
+        element_status = data["rows"][0]["elements"][0]["status"]
+        if element_status != "OK":
+            st.error(f"Could not calculate distance: {element_status}")
+            return None
+
         distance_text = data["rows"][0]["elements"][0]["distance"]["text"]
         miles = float(distance_text.replace(" mi", "").replace(",", ""))
         return miles
-    except:
+
+    except Exception as e:
+        st.error(f"Unexpected error during distance lookup: {e}")
         return None
 
 def calculate_delivery_fee(origin, destination, delivery_type, add_on):
@@ -48,9 +54,12 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
         "Lexington": 30
     }
 
-    round_trip_miles = get_distance_miles(origin, destination) * 2
-    if round_trip_miles is None:
+    one_way_miles = get_distance_miles(origin, destination)
+
+    if one_way_miles is None:
         return None, None
+
+    round_trip_miles = one_way_miles * 2
 
     fee = None
     min_fee = None
@@ -61,7 +70,7 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
         elif "lexington" in destination.lower():
             fee = city_simple_lookup["Lexington"]
         else:
-            return None, None  # Simple delivery not allowed outside those cities
+            return None, None  # Simple delivery not allowed outside these cities
     else:
         rules = {
             "Single": {"rate": 2.00, "min": 45 if origin == FRANKFORT_ADDRESS else 50},
@@ -74,7 +83,7 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
         fee = max(fee, rule["min"])
 
     if add_on == "To-The-Hole":
-        fee += 10  # Flat fee for add-on
+        fee += 10  # Flat add-on
 
     return round_trip_miles, fee
 
@@ -90,7 +99,7 @@ def send_email(data):
             server.login(EMAIL_CONFIG["sender_email"], EMAIL_CONFIG["sender_password"])
             server.send_message(msg)
     except Exception as e:
-        st.error(f"Email failed: {e}")
+        st.error(f"Email failed to send: {e}")
 
 # -------------------- UI -------------------- #
 
@@ -101,30 +110,28 @@ st.header("Step 1: Delivery Quote")
 
 with st.form("quote_form"):
     customer_address = st.text_input("Customer's Full Address")
-    delivery_origin = st.selectbox("Select Delivery Origin", {
-        "Frankfort Store": FRANKFORT_ADDRESS,
-        "Lexington Store": LEXINGTON_ADDRESS
-    })
+    delivery_origin_label = st.selectbox("Select Delivery Origin", ["Frankfort Store", "Lexington Store"])
+    delivery_origin = FRANKFORT_ADDRESS if delivery_origin_label == "Frankfort Store" else LEXINGTON_ADDRESS
     delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
     add_on = st.selectbox("Add-On Options (optional)", ["None", "To-The-Hole"])
     quote_requested = st.form_submit_button("Calculate Quote")
 
+quote_accepted = False
+
 if quote_requested:
-    origin_address = delivery_origin
     add_on_option = add_on if add_on != "None" else None
-    mileage, quote = calculate_delivery_fee(origin_address, customer_address, delivery_type, add_on_option)
+    mileage, quote = calculate_delivery_fee(delivery_origin, customer_address, delivery_type, add_on_option)
 
     if quote is not None:
         st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
         quote_accepted = st.checkbox("✅ Customer accepts this quote")
-
         if not quote_accepted:
             st.info("Quote not accepted. No further action needed.")
     else:
-        st.error("Could not calculate delivery. Address may be invalid or outside service area.")
+        st.error("Could not calculate delivery. Please check the address or delivery type.")
 
-# Step 2: Intake (Only if quote accepted)
-if "quote_accepted" in locals() and quote_accepted:
+# Step 2: Intake
+if quote_accepted:
     st.header("Step 2: Customer Intake")
 
     with st.form("intake_form"):
@@ -136,9 +143,9 @@ if "quote_accepted" in locals() and quote_accepted:
     if intake_submitted:
         st.success("Customer details saved.")
 
-# Step 3: Scheduling (Placeholder for Google Calendar integration)
+# Step 3: Scheduling
     st.header("Step 3: Schedule Delivery")
-    st.warning("Google Calendar integration coming soon. Select date/time manually for now.")
+    st.warning("Google Calendar integration coming soon. Please select manually.")
     delivery_date = st.date_input("Preferred Delivery Date")
     delivery_time = st.time_input("Preferred Delivery Time")
 
@@ -151,7 +158,7 @@ if "quote_accepted" in locals() and quote_accepted:
         Name: {customer_name}
         Phone: {phone}
         Address: {customer_address}
-        Origin: {origin_address}
+        Origin: {delivery_origin_label}
         Type: {delivery_type}
         Add-On: {add_on_option or "None"}
         Quote: ${quote:.2f}
@@ -162,4 +169,3 @@ if "quote_accepted" in locals() and quote_accepted:
         """
         send_email(full_message)
         st.success("Confirmation email sent!")
-
