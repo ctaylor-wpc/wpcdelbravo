@@ -60,16 +60,13 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
 
     round_trip_miles = one_way_miles * 2
 
-    fee = None
-    min_fee = None
-
     if delivery_type == "Simple":
         if "frankfort" in destination.lower():
             fee = city_simple_lookup["Frankfort"]
         elif "lexington" in destination.lower():
             fee = city_simple_lookup["Lexington"]
         else:
-            return None, None  # Simple delivery not allowed outside these cities
+            return None, None
     else:
         rules = {
             "Single": {"rate": 2.00, "min": 45 if origin == FRANKFORT_ADDRESS else 50},
@@ -82,7 +79,7 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
         fee = max(fee, rule["min"])
 
     if add_on == "To-The-Hole":
-        fee += 10  # Flat add-on
+        fee += 10
 
     return round_trip_miles, fee
 
@@ -102,72 +99,59 @@ def send_email(data):
 
 # -------------------- UI -------------------- #
 
-st.title("Wilson Plant Co. Delivery Quote Tool")
+st.title("📦 Wilson Plant Co. Delivery Quote Tool")
 
-# Step 1 & Step 2 combined flow
-st.header("Step 1 & 2: Delivery Quote + Customer Intake")
+# Step 1: Delivery Quote
+st.header("Step 1: Delivery Quote")
 
-with st.form("quote_and_intake_form"):
-    # Step 1 inputs
+with st.form("quote_form"):
     customer_address = st.text_input("Customer's Full Address")
     delivery_origin_label = st.selectbox("Select Delivery Origin", ["Frankfort Store", "Lexington Store"])
     delivery_origin = FRANKFORT_ADDRESS if delivery_origin_label == "Frankfort Store" else LEXINGTON_ADDRESS
     delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
     add_on = st.selectbox("Add-On Options (optional)", ["None", "To-The-Hole"])
 
-    # Step 2 inputs (intake)
-    customer_name = st.text_input("Customer Name")
-    phone = st.text_input("Phone Number")
-    notes = st.text_area("Gate codes, location notes, or special instructions")
+    quote_submit = st.form_submit_button("Calculate Quote")
 
-    quote_requested = st.form_submit_button("Calculate Quote")
-
-if quote_requested:
+if quote_submit:
     add_on_option = add_on if add_on != "None" else None
     mileage, quote = calculate_delivery_fee(delivery_origin, customer_address, delivery_type, add_on_option)
 
     if quote is not None:
         st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
 
-        # Store intake info for later steps
-        st.session_state["customer_name"] = customer_name
-        st.session_state["phone"] = phone
-        st.session_state["notes"] = notes
-        st.session_state["quote"] = quote
-        st.session_state["mileage"] = mileage
-        st.session_state["delivery_origin_label"] = delivery_origin_label
-        st.session_state["customer_address"] = customer_address
-        st.session_state["delivery_type"] = delivery_type
-        st.session_state["add_on_option"] = add_on_option
+        # Show next step: Intake + Scheduling
+        st.header("Step 2: Customer Details + Scheduling")
+
+        with st.form("intake_form"):
+            customer_name = st.text_input("Customer Name")
+            phone = st.text_input("Phone Number")
+            notes = st.text_area("Gate codes, location notes, or special instructions")
+
+            st.markdown("### Schedule Delivery")
+            delivery_date = st.date_input("Preferred Delivery Date")
+            delivery_time = st.time_input("Preferred Delivery Time")
+
+            confirm = st.form_submit_button("Send Confirmation Email")
+
+        if confirm:
+            full_message = f"""
+            NEW DELIVERY BOOKED:
+
+            Name: {customer_name}
+            Phone: {phone}
+            Address: {customer_address}
+            Origin: {delivery_origin_label}
+            Type: {delivery_type}
+            Add-On: {add_on_option or "None"}
+            Quote: ${quote:.2f}
+            Distance: {mileage:.1f} miles roundtrip
+            Notes: {notes}
+
+            Scheduled for: {delivery_date} at {delivery_time}
+            """
+            send_email(full_message)
+            st.success("Confirmation email sent!")
 
     else:
         st.error("Could not calculate delivery. Please check the address or delivery type.")
-
-# Only show Step 3 & 4 if quote calculation succeeded
-if quote_requested and "quote" in st.session_state:
-    # Step 3: Scheduling
-    st.header("Step 3: Schedule Delivery")
-    st.warning("Google Calendar integration coming soon. Please select manually.")
-    delivery_date = st.date_input("Preferred Delivery Date")
-    delivery_time = st.time_input("Preferred Delivery Time")
-
-    # Step 4: Send Notification
-    st.header("Step 4: Send Notification")
-    if st.button("Send Confirmation Email"):
-        full_message = f"""
-        NEW DELIVERY BOOKED:
-
-        Name: {st.session_state['customer_name']}
-        Phone: {st.session_state['phone']}
-        Address: {st.session_state['customer_address']}
-        Origin: {st.session_state['delivery_origin_label']}
-        Type: {st.session_state['delivery_type']}
-        Add-On: {st.session_state['add_on_option'] or "None"}
-        Quote: ${st.session_state['quote']:.2f}
-        Distance: {st.session_state['mileage']:.1f} miles roundtrip
-        Notes: {st.session_state['notes']}
-
-        Scheduled for: {delivery_date} at {delivery_time}
-        """
-        send_email(full_message)
-        st.success("Confirmation email sent!")
