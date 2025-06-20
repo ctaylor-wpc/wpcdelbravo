@@ -1,7 +1,12 @@
 import streamlit as st
 import requests
 import smtplib
+import os
+import datetime
 from email.mime.text import MIMEText
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
 
 # -------------------- CONFIGURATION -------------------- #
 
@@ -10,6 +15,9 @@ EMAIL_CONFIG = st.secrets["email"]
 
 FRANKFORT_ADDRESS = "3690 East West Connector, Frankfort, KY 40601"
 LEXINGTON_ADDRESS = "2700 Palumbo Drive, Lexington, KY 40509"
+
+SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+CALENDAR_ID = 'deliveries@wilsonnurseriesky.com'
 
 # -------------------- FUNCTIONS -------------------- #
 
@@ -21,28 +29,22 @@ def get_distance_miles(origin, destination):
         "key": API_KEY,
         "units": "imperial"
     }
-
     try:
         response = requests.get(url, params=params)
         if response.status_code != 200:
             st.error(f"Google Maps API request failed with status code {response.status_code}.")
             return None
-
         data = response.json()
-
         if data["status"] != "OK":
             st.error(f"Google Maps API error: {data.get('error_message', 'Unknown error')}")
             return None
-
         element_status = data["rows"][0]["elements"][0]["status"]
         if element_status != "OK":
             st.error(f"Could not calculate distance: {element_status}")
             return None
-
         distance_text = data["rows"][0]["elements"][0]["distance"]["text"]
         miles = float(distance_text.replace(" mi", "").replace(",", ""))
         return miles
-
     except Exception as e:
         st.error(f"Unexpected error during distance lookup: {e}")
         return None
@@ -52,12 +54,9 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
         "Frankfort": 8,
         "Lexington": 30
     }
-
     one_way_miles = get_distance_miles(origin, destination)
-
     if one_way_miles is None:
         return None, None
-
     round_trip_miles = one_way_miles * 2
 
     if delivery_type == "Simple":
@@ -88,7 +87,6 @@ def send_email(data):
     msg["Subject"] = "New Delivery Scheduled"
     msg["From"] = EMAIL_CONFIG["sender_email"]
     msg["To"] = EMAIL_CONFIG["notify_email"]
-
     try:
         with smtplib.SMTP(EMAIL_CONFIG["smtp_server"], EMAIL_CONFIG["smtp_port"]) as server:
             server.starttls()
@@ -97,66 +95,114 @@ def send_email(data):
     except Exception as e:
         st.error(f"Email failed to send: {e}")
 
+def create_google_calendar_event(summary, description, date, time_pref):
+    creds = None
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    else:
+        flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+        creds = flow.run_local_server(port=0)
+        with open("token.json", "w") as token:
+            token.write(creds.to_json())
+
+    service = build("calendar", "v3", credentials=creds)
+
+    # Determine hour from time preference
+    if time_pref == "AM":
+        hour = 9
+    elif time_pref == "PM":
+        hour = 13
+    else:
+        hour = 12
+
+    start_dt = datetime.datetime.combine(date, datetime.time(hour, 0))
+    end_dt = start_dt + datetime.timedelta(hours=1)
+
+    event = {
+        'summary': summary,
+        'description': description,
+        'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'America/New_York'},
+        'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'America/New_York'},
+    }
+
+    created_event = service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+    return created_event.get("htmlLink")
+
 # -------------------- UI -------------------- #
 
 st.title("📦 Wilson Plant Co. Delivery Quote Tool")
 
-# Step 1: Delivery Quote
-st.header("Step 1: Delivery Quote")
+if st.session_state.get("delivery_complete"):
+    st.balloons()
+    st.header("✅ Delivery Scheduled!")
 
-with st.form("quote_form"):
-    customer_address = st.text_input("Customer's Full Address")
-    delivery_origin_label = st.selectbox("Select Delivery Origin", ["Frankfort Store", "Lexington Store"])
-    delivery_origin = FRANKFORT_ADDRESS if delivery_origin_label == "Frankfort Store" else LEXINGTON_ADDRESS
-    delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
-    add_on = st.selectbox("Add-On Options (optional)", ["None", "To-The-Hole"])
+    if st.button("Would you like to complete another delivery?"):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
-    quote_submit = st.form_submit_button("Calculate Quote")
+else:
+    st.header("Step 1: Delivery Quote")
+    with st.form("quote_form"):
+        customer_address = st.text_input("Customer's Full Address")
+        delivery_origin_label = st.selectbox("Select Delivery Origin", ["Frankfort Store", "Lexington Store"])
+        delivery_origin = FRANKFORT_ADDRESS if delivery_origin_label == "Frankfort Store" else LEXINGTON_ADDRESS
+        delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
+        add_on = st.selectbox("Add-On Options (optional)", ["None", "To-The-Hole"])
+        quote_submit = st.form_submit_button("Calculate Quote")
 
-if quote_submit:
-    add_on_option = add_on if add_on != "None" else None
-    mileage, quote = calculate_delivery_fee(delivery_origin, customer_address, delivery_type, add_on_option)
+    if quote_submit:
+        add_on_option = add_on if add_on != "None" else None
+        mileage, quote = calculate_delivery_fee(delivery_origin, customer_address, delivery_type, add_on_option)
 
-    if quote is not None:
-        st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
+        if quote is not None:
+            st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
 
-        # Step 2: Intake & Scheduling (revealed after quote)
-        st.header("Step 2: Customer Details + Scheduling")
+            # Step 2: Customer Details & Scheduling
+            st.header("Step 2: Customer Details + Scheduling")
+            with st.form("intake_form"):
+                customer_name = st.text_input("Customer Name")
+                phone = st.text_input("Phone Number")
+                notes = st.text_area("Gate codes, location notes, or special instructions")
 
-        with st.form("intake_form"):
-            customer_name = st.text_input("Customer Name")
-            phone = st.text_input("Phone Number")
-            notes = st.text_area("Gate codes, location notes, or special instructions")
+                st.markdown("### Schedule Delivery")
+                delivery_date = st.date_input("Preferred Delivery Date")
+                formatted_date = delivery_date.strftime("%A %m/%d/%Y")
+                delivery_time_pref = st.selectbox(
+                    "Preferred Delivery Time",
+                    ["AM", "PM", "Doesn’t Matter"]
+                )
 
-            st.markdown("### Schedule Delivery")
-            delivery_date = st.date_input("Preferred Delivery Date")
-            formatted_date = delivery_date.strftime("%A %m/%d/%Y")
+                confirm = st.form_submit_button("Send Confirmation Email")
 
-            delivery_time_pref = st.selectbox(
-                "Preferred Delivery Time",
-                ["AM", "PM", "Doesn't Matter"]
-            )
+            if confirm:
+                full_message = f"""
+                NEW DELIVERY BOOKED:
 
-            confirm = st.form_submit_button("Send Confirmation Email")
+                Name: {customer_name}
+                Phone: {phone}
+                Address: {customer_address}
+                Origin: {delivery_origin_label}
+                Type: {delivery_type}
+                Add-On: {add_on_option or "None"}
+                Quote: ${quote:.2f}
+                Distance: {mileage:.1f} miles roundtrip
+                Notes: {notes}
 
-        if confirm:
-            full_message = f"""
-            NEW DELIVERY BOOKED:
+                Scheduled for: {formatted_date} — {delivery_time_pref}
+                """
 
-            Name: {customer_name}
-            Phone: {phone}
-            Address: {customer_address}
-            Origin: {delivery_origin_label}
-            Type: {delivery_type}
-            Add-On: {add_on_option or "None"}
-            Quote: ${quote:.2f}
-            Distance: {mileage:.1f} miles roundtrip
-            Notes: {notes}
+                send_email(full_message)
+                event_link = create_google_calendar_event(
+                    summary=f"Delivery for {customer_name}",
+                    description=full_message,
+                    date=delivery_date,
+                    time_pref=delivery_time_pref
+                )
 
-            Scheduled for: {formatted_date} — {delivery_time_pref}
-            """
-            send_email(full_message)
-            st.success("Confirmation email sent!")
-
-    else:
-        st.error("Could not calculate delivery. Please check the address or delivery type.")
+                st.session_state["delivery_complete"] = True
+                st.success("✅ Confirmation email sent and event added to calendar!")
+                st.markdown(f"🗓 [View Calendar Event]({event_link})", unsafe_allow_html=True)
+                st.rerun()
+        else:
+            st.error("Could not calculate delivery. Please check the address or delivery type.")
