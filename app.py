@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 import smtplib
-import os
+import json
 import datetime
 from email.mime.text import MIMEText
 from google.oauth2 import service_account
@@ -11,12 +11,11 @@ from googleapiclient.discovery import build
 
 API_KEY = st.secrets["api"]["google_maps_api_key"]
 EMAIL_CONFIG = st.secrets["email"]
+SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+CALENDAR_ID = 'deliveries@wilsonnurseriesky.com'
 
 FRANKFORT_ADDRESS = "3690 East West Connector, Frankfort, KY 40601"
 LEXINGTON_ADDRESS = "2700 Palumbo Drive, Lexington, KY 40509"
-
-SCOPES = ['https://www.googleapis.com/auth/calendar.events']
-CALENDAR_ID = 'deliveries@wilsonnurseriesky.com'
 
 # -------------------- FUNCTIONS -------------------- #
 
@@ -31,15 +30,14 @@ def get_distance_miles(origin, destination):
     try:
         response = requests.get(url, params=params)
         if response.status_code != 200:
-            st.error(f"Google Maps API request failed with status code {response.status_code}.")
+            st.error(f"Google Maps API request failed ({response.status_code})")
             return None
         data = response.json()
         if data["status"] != "OK":
             st.error(f"Google Maps API error: {data.get('error_message', 'Unknown error')}")
             return None
-        element_status = data["rows"][0]["elements"][0]["status"]
-        if element_status != "OK":
-            st.error(f"Could not calculate distance: {element_status}")
+        if data["rows"][0]["elements"][0]["status"] != "OK":
+            st.error("Could not calculate distance for the given address.")
             return None
         distance_text = data["rows"][0]["elements"][0]["distance"]["text"]
         miles = float(distance_text.replace(" mi", "").replace(",", ""))
@@ -95,10 +93,8 @@ def send_email(data):
         st.error(f"Email failed to send: {e}")
 
 def create_google_calendar_event(summary, description, date, time_pref):
-    creds = service_account.Credentials.from_service_account_file(
-        "service_account.json", scopes=SCOPES
-    )
-
+    service_info = json.loads(st.secrets["gcp"]["service_account_json"])
+    creds = service_account.Credentials.from_service_account_info(service_info, scopes=SCOPES)
     service = build("calendar", "v3", credentials=creds)
 
     if time_pref == "AM":
