@@ -60,7 +60,7 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
         if "frankfort" in destination.lower():
             fee = city_simple_lookup["Frankfort"]
         elif "lexington" in destination.lower():
-            fee = city_simple_lookup["Lexington"]
+            fee = city_simple_lookup["Lexlexington"]
         else:
             return None, None
     else:
@@ -91,6 +91,7 @@ def send_email(data):
             server.send_message(msg)
     except Exception as e:
         st.error(f"Email failed to send: {e}")
+        raise
 
 def create_google_calendar_event(summary, description, date, time_pref):
     service_info = json.loads(st.secrets["gcp"]["service_account_json"])
@@ -124,7 +125,6 @@ st.title("📦 Wilson Plant Co. Delivery Quote Tool")
 if st.session_state.get("delivery_complete"):
     st.balloons()
     st.header("✅ Delivery Scheduled!")
-
     if st.button("Would you like to complete another delivery?"):
         for key in list(st.session_state.keys()):
             del st.session_state[key]
@@ -147,7 +147,6 @@ else:
         if quote is not None:
             st.success(f"Estimated delivery cost: **${quote:.2f}** for ~{mileage:.1f} miles round-trip")
 
-            # Step 2: Customer Details & Scheduling
             st.header("Step 2: Customer Details + Scheduling")
             with st.form("intake_form"):
                 customer_name = st.text_input("Customer Name")
@@ -165,33 +164,43 @@ else:
                 confirm = st.form_submit_button("Send Confirmation Email")
 
             if confirm:
-                full_message = f"""
-                NEW DELIVERY BOOKED:
+                st.write("✅ Starting confirmation block...")
+                try:
+                    full_message = f"""
+                    NEW DELIVERY BOOKED:
 
-                Name: {customer_name}
-                Phone: {phone}
-                Address: {customer_address}
-                Origin: {delivery_origin_label}
-                Type: {delivery_type}
-                Add-On: {add_on_option or "None"}
-                Quote: ${quote:.2f}
-                Distance: {mileage:.1f} miles roundtrip
-                Notes: {notes}
+                    Name: {customer_name}
+                    Phone: {phone}
+                    Address: {customer_address}
+                    Origin: {delivery_origin_label}
+                    Type: {delivery_type}
+                    Add-On: {add_on_option or "None"}
+                    Quote: ${quote:.2f}
+                    Distance: {mileage:.1f} miles roundtrip
+                    Notes: {notes}
 
-                Scheduled for: {formatted_date} — {delivery_time_pref}
-                """
+                    Scheduled for: {formatted_date} — {delivery_time_pref}
+                    """
+                    st.write("📨 Message composed")
 
-                send_email(full_message)
-                event_link = create_google_calendar_event(
-                    summary=f"Delivery for {customer_name}",
-                    description=full_message,
-                    date=delivery_date,
-                    time_pref=delivery_time_pref
-                )
+                    send_email(full_message)
+                    st.write("✅ Email sent")
 
-                st.session_state["delivery_complete"] = True
-                st.success("✅ Confirmation email sent and event added to calendar!")
-                st.markdown(f"🗓 [View Calendar Event]({event_link})", unsafe_allow_html=True)
-                st.rerun()
+                    event_link = create_google_calendar_event(
+                        summary=f"Delivery for {customer_name}",
+                        description=full_message,
+                        date=delivery_date,
+                        time_pref=delivery_time_pref
+                    )
+                    st.write("✅ Calendar event created")
+
+                    st.session_state["delivery_complete"] = True
+                    st.success("✅ Confirmation email sent and event added to calendar!")
+                    st.markdown(f"🗓 [View Calendar Event]({event_link})", unsafe_allow_html=True)
+                    st.rerun()
+
+                except Exception as e:
+                    st.error("🚫 Something went wrong during confirmation.")
+                    st.write(e)
         else:
             st.error("Could not calculate delivery. Please check the address or delivery type.")
