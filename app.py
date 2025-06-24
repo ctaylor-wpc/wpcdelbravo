@@ -8,11 +8,36 @@ from email.mime.multipart import MIMEMultipart
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
-# --------------------- SETUP ---------------------
+# --------------------- CUSTOM STYLING ---------------------
+st.markdown("""
+    <style>
+        body {
+            background-color: #FBF8F6;
+            color: #5e5e5e;
+        }
+        .stButton>button {
+            background-color: #545A35 !important;
+            color: white !important;
+            border: none;
+            border-radius: 5px;
+            padding: 0.5rem 1rem;
+        }
+        .stTextInput>div>div>input {
+            color: #5e5e5e;
+        }
+        .stSelectbox>div>div>div>div {
+            color: #5e5e5e;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #23343C;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(page_title="Delivery Quote & Scheduler")
 st.title("Wilson Plant Co Delivery Scheduler")
 
-# Constants for locations
+# --------------------- CONSTANTS ---------------------
 STORE_ADDRESSES = {
     "Frankfort": "3690 East West Connector, Frankfort, KY 40601",
     "Lexington": "2700 Palumbo Drive, Lexington, KY 40509"
@@ -26,9 +51,9 @@ DELIVERY_TYPES = {
     "Bulk Plus": {"Frankfort": (3.15, 65), "Lexington": (3.15, 80)},
 }
 
-ADD_ON_FEE = 20  # Flat fee for "To-The-Hole"
+ADD_ON_FEE = 20
 
-# --------------------- FUNCTION: Calculate Distance ---------------------
+# --------------------- FUNCTIONS ---------------------
 def get_distance_miles(origin, destination):
     api_key = st.secrets["api"]["google_maps_api_key"]
     endpoint = "https://maps.googleapis.com/maps/api/distancematrix/json"
@@ -43,13 +68,11 @@ def get_distance_miles(origin, destination):
 
     try:
         distance_text = data["rows"][0]["elements"][0]["distance"]["text"]
-        distance_miles = float(distance_text.replace(" mi", ""))
-        return distance_miles
+        return float(distance_text.replace(" mi", ""))
     except:
         st.error("❌ Error: Google Maps API failed to calculate distance.")
         st.stop()
 
-# --------------------- FUNCTION: Calculate Fee ---------------------
 def calculate_delivery_fee(origin_store, destination, delivery_type, add_on):
     origin_address = STORE_ADDRESSES[origin_store]
     if delivery_type == "Simple":
@@ -60,7 +83,6 @@ def calculate_delivery_fee(origin_store, destination, delivery_type, add_on):
         else:
             st.error("Simple delivery not available for this location.")
             st.stop()
-
     rate, minimum = DELIVERY_TYPES[delivery_type][origin_store]
     miles = get_distance_miles(origin_address, destination)
     roundtrip = miles * 2
@@ -69,7 +91,6 @@ def calculate_delivery_fee(origin_store, destination, delivery_type, add_on):
         fee += ADD_ON_FEE
     return roundtrip, round(fee, 2)
 
-# --------------------- FUNCTION: Send Email ---------------------
 def send_email(message):
     config = st.secrets["email"]
     msg = MIMEMultipart()
@@ -83,7 +104,6 @@ def send_email(message):
         server.login(config["sender_email"], config["sender_password"])
         server.sendmail(config["sender_email"], config["notify_email"], msg.as_string())
 
-# --------------------- FUNCTION: Create Calendar Event ---------------------
 def create_google_calendar_event(summary, description, date, time_pref):
     credentials_info = json.loads(st.secrets["gcp"]["service_account_json"])
     credentials = service_account.Credentials.from_service_account_info(
@@ -108,7 +128,11 @@ def create_google_calendar_event(summary, description, date, time_pref):
     created_event = service.events().insert(calendarId=calendar_id, body=event).execute()
     return created_event.get("htmlLink")
 
-# --------------------- UI: Step 1 ---------------------
+# --------------------- SESSION STATE SETUP ---------------------
+if "quote_ready" not in st.session_state:
+    st.session_state.quote_ready = False
+
+# --------------------- STEP 1: QUOTE FORM ---------------------
 st.header("Step 1: Quote")
 with st.form("quote_form"):
     customer_address = st.text_input("Customer Address")
@@ -119,9 +143,18 @@ with st.form("quote_form"):
 
 if submit_quote and customer_address:
     mileage, quote = calculate_delivery_fee(delivery_origin, customer_address, delivery_type, add_on_option)
-    st.success(f"Calculated delivery cost: **${quote}** ({round(mileage, 1)} round-trip miles)")
+    st.session_state.quote_ready = True
+    st.session_state.quote = quote
+    st.session_state.mileage = mileage
+    st.session_state.customer_address = customer_address
+    st.session_state.delivery_origin = delivery_origin
+    st.session_state.delivery_type = delivery_type
+    st.session_state.add_on_option = add_on_option
 
-    # --------------------- UI: Step 2 + 3 ---------------------
+# --------------------- STEP 2 & 3 ---------------------
+if st.session_state.quote_ready:
+    st.success(f"Calculated delivery cost: **${st.session_state.quote}** ({round(st.session_state.mileage, 1)} round-trip miles)")
+
     st.header("Step 2: Customer Info")
     customer_name = st.text_input("Customer Name")
     customer_phone = st.text_input("Phone Number")
@@ -140,13 +173,13 @@ if submit_quote and customer_address:
 
         Name: {customer_name}
         Phone: {customer_phone}
-        Address: {customer_address}
+        Address: {st.session_state.customer_address}
         Gate Notes: {gate_codes}
 
-        Quote: ${quote}
-        Delivery Origin: {delivery_origin}
-        Delivery Type: {delivery_type}
-        Add-On: {add_on_option}
+        Quote: ${st.session_state.quote}
+        Delivery Origin: {st.session_state.delivery_origin}
+        Delivery Type: {st.session_state.delivery_type}
+        Add-On: {st.session_state.add_on_option}
 
         Scheduled Date: {weekday} {formatted_date}
         Time Preference: {time_pref}
@@ -163,8 +196,9 @@ if submit_quote and customer_address:
             st.success("Delivery Scheduled!")
             st.markdown(f"[📅 View on Calendar]({event_link})")
             if st.button("➕ Schedule Another Delivery"):
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.experimental_rerun()
         except Exception as e:
             st.error("❌ Something went wrong.")
             st.write(e)
-
