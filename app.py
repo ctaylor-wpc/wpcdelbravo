@@ -13,6 +13,8 @@ import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import base64
+from pdfrw import PdfReader, PdfWriter, PageMerge
+
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
 
@@ -178,9 +180,7 @@ if st.session_state.get("quote_shown"):
             created = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
             return created.get("htmlLink")
 
-        from pdfrw import PdfReader, PdfWriter, PageMerge
-
-        def create_pdf_field():
+        def create_pdf_filled():
             template_path = "delivery_template.pdf"
             output_buffer = io.BytesIO()
 
@@ -229,47 +229,47 @@ if st.session_state.get("quote_shown"):
             time_pref=time_pref
         )
 
-            pdf_buffer = create_pdf_filled()
-            pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
+        pdf_buffer = create_pdf_filled()
+        pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
 
-    try:
-        msg = MIMEMultipart()
-        msg["From"] = SENDER_EMAIL
-        msg["To"] = NOTIFY_EMAIL
-        msg["Subject"] = f"Delivery Scheduled: {customer_name}"
-        msg.attach(MIMEText(description + f"\n\nCalendar Event: {event_link}", "plain"))
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = SENDER_EMAIL
+            msg["To"] = NOTIFY_EMAIL
+            msg["Subject"] = f"Delivery Scheduled: {customer_name}"
+            msg.attach(MIMEText(description + f"\n\nCalendar Event: {event_link}", "plain"))
 
-        part = MIMEApplication(pdf_buffer.read(), Name=pdf_filename)
-        part['Content-Disposition'] = f'attachment; filename="{pdf_filename}"'
-        msg.attach(part)
+            part = MIMEApplication(pdf_buffer.read(), Name=pdf_filename)
+            part['Content-Disposition'] = f'attachment; filename="{pdf_filename}"'
+            msg.attach(part)
 
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.sendmail(SENDER_EMAIL, NOTIFY_EMAIL, msg.as_string())
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                server.sendmail(SENDER_EMAIL, NOTIFY_EMAIL, msg.as_string())
 
-        st.success("Delivery Scheduled!")
+            st.success("Delivery Scheduled!")
 
-        pdf_buffer.seek(0)
-        b64_pdf = base64.b64encode(pdf_buffer.read()).decode()
-        href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="{pdf_filename}" target="_blank">Download PDF Receipt</a>'
-        st.markdown(href, unsafe_allow_html=True)
+            pdf_buffer.seek(0)
+            b64_pdf = base64.b64encode(pdf_buffer.read()).decode()
+            href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="{pdf_filename}" target="_blank">Download PDF Receipt</a>'
+            st.markdown(href, unsafe_allow_html=True)
 
-        st.markdown(
-            f"""
-            <script>
-            function printPdf() {{
-                const win = window.open("data:application/pdf;base64,{b64_pdf}", '_blank');
-                win.print();
-            }}
-            </script>
-            <button onclick="printPdf()">Print PDF</button>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(
+                f"""
+                <script>
+                function printPdf() {{
+                    const win = window.open("data:application/pdf;base64,{b64_pdf}", '_blank');
+                    win.print();
+                }}
+                </script>
+                <button onclick="printPdf()">Print PDF</button>
+                """,
+                unsafe_allow_html=True
+            )
 
-        if st.button("Schedule another delivery"):
-            reset_app()
+            if st.button("Schedule another delivery"):
+                reset_app()
 
-    except Exception as e:
-        st.error(f"Failed to send email: {e}")
+        except Exception as e:
+            st.error(f"Failed to send email: {e}")
