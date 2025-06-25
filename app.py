@@ -214,7 +214,7 @@ if st.session_state.get("quote_shown"):
                          .replace("\n", "  /  ")
                          .replace("\r", "")
                          .replace(":", "-")
-                         .replace("\", " aaa ")
+                         .replace("\"", " ' ")
                          .replace("\\", "/")
                          .strip()
                 )
