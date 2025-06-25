@@ -220,17 +220,17 @@ if st.session_state.get("quote_shown"):
             output_buffer.seek(0)
             return output_buffer
 
-    description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
+        description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
     
-    event_link = create_google_calendar_event(
+        event_link = create_google_calendar_event(
             summary=f"Delivery for {customer_name}",
             description=description,
             date_str=preferred_date.strftime('%Y-%m-%d'),
             time_pref=time_pref
         )
 
-    pdf_buffer = create_pdf_filled()
-    pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
+            pdf_buffer = create_pdf_filled()
+            pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
 
     try:
         msg = MIMEMultipart()
