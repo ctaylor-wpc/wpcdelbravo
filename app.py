@@ -232,7 +232,7 @@ if st.session_state.get("quote_shown"):
                         if annotation.get(SUBTYPE_KEY) == WIDGET_SUBTYPE_KEY:
                             key = annotation.get(ANNOT_FIELD_KEY)
                             if key:
-                                if is instance(key, str):
+                                if isinstance(key, str):
                                     key_name = key.strip("()")
                                 else:
                                     key_name = str(key)[1:-1]
