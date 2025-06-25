@@ -246,7 +246,11 @@ if st.session_state.get("quote_shown"):
 
             doc = fitz.open(filled_path)
             for page in doc:
-                page.flatten_forms()
+                widgets = page.widgets()
+                if widgets:
+                    for widget in widgets:
+                        widget.update()  # Forces rendering
+                        widget.field_flags |= 1 << 0  # Set field to ReadOnly (optional)
             doc.save(output_buffer, deflate=True)
             output_buffer.seek(0)
 
