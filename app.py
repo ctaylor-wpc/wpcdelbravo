@@ -13,7 +13,11 @@ import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import base64
-from pdfrw import PdfObject, PdfReader, PdfWriter, PageMerge
+from pdfrw import PdfObject
+from pdfrw import PdfName
+from pdfrw import PdfReader
+from pdfrw import PdfWriter
+from pdfrw import PageMerge
 
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
@@ -228,10 +232,13 @@ if st.session_state.get("quote_shown"):
                         if annotation.get(SUBTYPE_KEY) == WIDGET_SUBTYPE_KEY:
                             key = annotation.get(ANNOT_FIELD_KEY)
                             if key:
-                                key_name = key[1:-1]  # strip parentheses
+                                if is instance(key, str):
+                                    key_name = key.strip("()")
+                                else:
+                                    key_name = str(key)[1:-1]
                                 if key_name in data:
                                     value = sanitize_for_pdf(data[key_name])
-                                    annotation.update({ANNOT_VAL_KEY: PdfObject(f"({value})")})
+                                    annotation[PdfName("V")] = PdfObject(f"({value})")
 
             PdfWriter().write(output_buffer, template_pdf)
             output_buffer.seek(0)
