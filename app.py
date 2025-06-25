@@ -13,7 +13,7 @@ import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import base64
-from pdfrw import PdfReader, PdfWriter, PageMerge
+from pdfrw import PdfObject, PdfReader, PdfWriter, PageMerge
 
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
@@ -214,7 +214,8 @@ if st.session_state.get("quote_shown"):
                             if key:
                                 key_name = key[1:-1]  # strip parentheses
                                 if key_name in data:
-                                    annotation.update({ANNOT_VAL_KEY: f"{data[key_name]}"})
+                                    safe_value = str(data[key_name]).replace("(", "").replace(")", "")
+                                    annotation.update({ANNOT_VAL_KEY: PdfObject(f"({safe_value})")})
 
             PdfWriter().write(output_buffer, template_pdf)
             output_buffer.seek(0)
