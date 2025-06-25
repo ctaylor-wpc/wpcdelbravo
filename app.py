@@ -18,6 +18,7 @@ from pdfrw import PdfName
 from pdfrw import PdfReader
 from pdfrw import PdfWriter
 from pdfrw import PageMerge
+import fitz
 
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
@@ -186,6 +187,7 @@ if st.session_state.get("quote_shown"):
 
         def create_pdf_filled():
             template_path = "delivery_template.pdf"
+            filled_path = "/tmp/filled_temp.pdf"
             output_buffer = io.BytesIO()
 
             ANNOT_KEY = "/Annots"
@@ -240,8 +242,14 @@ if st.session_state.get("quote_shown"):
                                     value = sanitize_for_pdf(data[key_name])
                                     annotation[PdfName("V")] = PdfObject(f"({value})")
 
-            PdfWriter().write(output_buffer, template_pdf)
+            PdfWriter((filled_path, trailer=template_pdf).write()
+
+            doc = fitz.open(filled_path)
+            for page in doc:
+                page.flatten_forms()
+            doc.save(output_buffer, deflate=True)
             output_buffer.seek(0)
+
             return output_buffer
 
         description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
