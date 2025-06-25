@@ -242,7 +242,7 @@ if st.session_state.get("quote_shown"):
                                     value = sanitize_for_pdf(data[key_name])
                                     annotation[PdfName("V")] = PdfObject(f"({value})")
 
-            PdfWriter((filled_path, trailer=template_pdf).write()
+            PdfWriter(filled_path, trailer=template_pdf).write()
 
             doc = fitz.open(filled_path)
             for page in doc:
