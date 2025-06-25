@@ -12,6 +12,7 @@ from googleapiclient.discovery import build
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+import base64
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
 
@@ -75,7 +76,6 @@ origin_address = {
     "Lexington": "2700 Palumbo Drive, Lexington, KY 40509"
 }[origin_choice]
 
-# Get roundtrip mileage from Google Maps
 @st.cache_data(show_spinner=False)
 def get_distance_miles(origin, destination):
     url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={origin}&destinations={destination}&key={GOOGLE_MAPS_API_KEY}"
@@ -132,7 +132,6 @@ if st.session_state.get("quote_shown"):
 
     st.header("Step 3: Scheduling")
     today = date.today()
-    available_days = [today + timedelta(days=i) for i in range(1, 30) if (today + timedelta(days=i)).weekday() < 5]
     preferred_date = st.date_input("Preferred Delivery Date", min_value=today + timedelta(days=1))
     if preferred_date.weekday() >= 5:
         st.warning("Weekends are not available. Please select a weekday.")
@@ -174,13 +173,15 @@ if st.session_state.get("quote_shown"):
         def create_pdf():
             buffer = io.BytesIO()
             p = canvas.Canvas(buffer, pagesize=letter)
-            p.drawString(100, 750, f"Customer: {customer_name}")
-            p.drawString(100, 735, f"Phone: {customer_phone}")
-            p.drawString(100, 720, f"Address: {customer_address}")
-            p.drawString(100, 705, f"Quote: ${st.session_state.quote:.2f}")
-            p.drawString(100, 690, f"Preferred Date: {preferred_date.strftime('%A, %m/%d/%Y')}")
-            p.drawString(100, 675, f"Preferred Time: {time_pref}")
-            p.drawString(100, 660, f"Notes: {customer_notes}")
+            p.setFont("Helvetica", 12)
+            p.drawString(100, 750, f"Delivery Confirmation")
+            p.drawString(100, 730, f"Customer Name: {customer_name}")
+            p.drawString(100, 715, f"Phone: {customer_phone}")
+            p.drawString(100, 700, f"Customer Address: {customer_address}")
+            p.drawString(100, 685, f"Quote: ${st.session_state.quote:.2f}")
+            p.drawString(100, 670, f"Preferred Date: {preferred_date.strftime('%A, %m/%d/%Y')}")
+            p.drawString(100, 655, f"Preferred Time: {time_pref}")
+            p.drawString(100, 640, f"Notes: {customer_notes}")
             p.save()
             buffer.seek(0)
             return buffer
@@ -194,23 +195,46 @@ if st.session_state.get("quote_shown"):
         )
 
         pdf_buffer = create_pdf()
+        pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
 
-        msg = MIMEMultipart()
-        msg["From"] = SENDER_EMAIL
-        msg["To"] = NOTIFY_EMAIL
-        msg["Subject"] = f"Delivery Scheduled: {customer_name}"
-        msg.attach(MIMEText(description + f"\n\nCalendar Event: {event_link}", "plain"))
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = SENDER_EMAIL
+            msg["To"] = NOTIFY_EMAIL
+            msg["Subject"] = f"Delivery Scheduled: {customer_name}"
+            msg.attach(MIMEText(description + f"\n\nCalendar Event: {event_link}", "plain"))
 
-        part = MIMEApplication(pdf_buffer.read(), Name="delivery_receipt.pdf")
-        part['Content-Disposition'] = 'attachment; filename="delivery_receipt.pdf"'
-        msg.attach(part)
+            part = MIMEApplication(pdf_buffer.read(), Name=pdf_filename)
+            part['Content-Disposition'] = f'attachment; filename="{pdf_filename}"'
+            msg.attach(part)
 
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.sendmail(SENDER_EMAIL, NOTIFY_EMAIL, msg.as_string())
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                server.sendmail(SENDER_EMAIL, NOTIFY_EMAIL, msg.as_string())
 
-        st.success("Delivery Scheduled!")
-        if st.button("Schedule another delivery"):
-            reset_app()
+            st.success("Delivery Scheduled!")
 
+            pdf_buffer.seek(0)
+            b64_pdf = base64.b64encode(pdf_buffer.read()).decode()
+            href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="{pdf_filename}" target="_blank">Download PDF Receipt</a>'
+            st.markdown(href, unsafe_allow_html=True)
+
+            st.markdown(
+                f"""
+                <script>
+                function printPdf() {{
+                    const win = window.open("data:application/pdf;base64,{b64_pdf}", '_blank');
+                    win.print();
+                }}
+                </script>
+                <button onclick="printPdf()">Print PDF</button>
+                """,
+                unsafe_allow_html=True
+            )
+
+            if st.button("Schedule another delivery"):
+                reset_app()
+
+        except Exception as e:
+            st.error(f"Failed to send email: {e}")
