@@ -178,21 +178,47 @@ if st.session_state.get("quote_shown"):
             created = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
             return created.get("htmlLink")
 
-        def create_pdf():
-            buffer = io.BytesIO()
-            p = canvas.Canvas(buffer, pagesize=letter)
-            p.setFont("Helvetica", 12)
-            p.drawString(100, 750, f"Delivery Confirmation")
-            p.drawString(100, 730, f"Customer Name: {customer_name}")
-            p.drawString(100, 715, f"Phone: {customer_phone}")
-            p.drawString(100, 700, f"Customer Address: {customer_address}")
-            p.drawString(100, 685, f"Quote: ${st.session_state.quote:.2f}")
-            p.drawString(100, 670, f"Preferred Date: {preferred_date.strftime('%A, %m/%d/%Y')}")
-            p.drawString(100, 655, f"Preferred Time: {time_pref}")
-            p.drawString(100, 640, f"Notes: {customer_notes}")
-            p.save()
-            buffer.seek(0)
-            return buffer
+     	from pdfrw import PdfReader, PdfWriter, PageMerge
+
+        def create_pdf_field():
+            template_path = "delivery_template.pdf"
+    output_buffer = io.BytesIO()
+
+    ANNOT_KEY = "/Annots"
+    ANNOT_FIELD_KEY = "/T"
+    ANNOT_VAL_KEY = "/V"
+    ANNOT_RECT_KEY = "/Rect"
+    SUBTYPE_KEY = "/Subtype"
+    WIDGET_SUBTYPE_KEY = "/Widget"
+
+    data = {
+        "customer_name": customer_name,
+        "customer_phone": customer_phone,
+        "customer_address": customer_address,
+        "origin_choice": origin_choice,
+        "delivery_type": delivery_type,
+        "quote": f"${st.session_state.quote:.2f}",
+        "customer_notes": customer_notes,
+        "delivery_details": delivery_details,
+        "preferred_date": preferred_date.strftime('%A, %m/%d/%Y'),
+        "cashier_initials": cashier_initials
+    }
+
+    template_pdf = PdfReader(template_path)
+    for page in template_pdf.pages:
+        annotations = page.get(ANNOT_KEY)
+        if annotations:
+            for annotation in annotations:
+                if annotation.get(SUBTYPE_KEY) == WIDGET_SUBTYPE_KEY:
+                    key = annotation.get(ANNOT_FIELD_KEY)
+                    if key:
+                        key_name = key[1:-1]  # strip parentheses
+                        if key_name in data:
+                            annotation.update({ANNOT_VAL_KEY: f"{data[key_name]}"})
+
+    PdfWriter().write(output_buffer, template_pdf)
+    output_buffer.seek(0)
+    return output_buffer
 
         description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
         event_link = create_google_calendar_event(
@@ -202,7 +228,7 @@ if st.session_state.get("quote_shown"):
             time_pref=time_pref
         )
 
-        pdf_buffer = create_pdf()
+        pdf_buffer = create_pdf_filled()
         pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
 
         try:
