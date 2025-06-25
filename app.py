@@ -204,6 +204,22 @@ if st.session_state.get("quote_shown"):
                 "cashier_initials": cashier_initials
             }
 
+            def sanitize_for_pdf(value):
+                if not isinstance(value, str):
+                    value = str(value)
+                return (
+                    value.replace("(", "[")
+                         .replace(")", "]")
+                         .replace("&", "and")
+                         .replace("\n", "  /  ")
+                         .replace("\r", "")
+                         .replace(":", "-")
+                         .replace("\", " ' ")
+                         .replace("\\", "/")
+                         .strip()
+                )
+
+
             template_pdf = PdfReader(template_path)
             for page in template_pdf.pages:
                 annotations = page.get(ANNOT_KEY)
@@ -214,8 +230,8 @@ if st.session_state.get("quote_shown"):
                             if key:
                                 key_name = key[1:-1]  # strip parentheses
                                 if key_name in data:
-                                    safe_value = str(data[key_name]).replace("(", "").replace(")", "")
-                                    annotation.update({ANNOT_VAL_KEY: PdfObject(f"({safe_value})")})
+                                    value = sanitize_for_pdf(data[key_name])
+                                    annotation.update({ANNOT_VAL_KEY: PdfObject(f"({value})")})
 
             PdfWriter().write(output_buffer, template_pdf)
             output_buffer.seek(0)
