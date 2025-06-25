@@ -138,6 +138,7 @@ if st.session_state.get("quote_shown"):
     customer_notes = st.text_area("Delivery location, gate codes, or other notes")
 
     st.header("Step 3: Scheduling")
+    cashier_initials = st.text_input("Your Initials")
     today = date.today()
     preferred_date = st.date_input("Preferred Delivery Date", min_value=today + timedelta(days=1))
     if preferred_date.weekday() >= 5:
