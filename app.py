@@ -87,31 +87,37 @@ def get_distance_miles(origin, destination):
     return round(meters / 1609.34, 2)
 
 def calculate_delivery_fee(origin, destination, delivery_type, add_on):
-    if delivery_type == "Simple":
-        if "Frankfort" in destination:
-            return 0, 8.00
-        elif "Lexington" in destination:
-            return 0, 30.00
-        else:
-            return None, None
-
     mileage = get_distance_miles(origin, destination)
     if mileage is None:
         return None, None
+
+    round_trip = mileage * 2
+
+    if delivery_type == "Simple":
+        if "Frankfort" in destination:
+            return round_trip, 8.00
+        elif "Lexington" in destination:
+            return round_trip, 30.00
+        else:
+            return None, None  # triggers error later: "Simple Delivery Available for Frankfort & Lexington only"
+     
+    if add_on and delivery_type not in ["Double", "Bulk Plus"]:
+	return None, "To the Hole Delivery Requires either Double or Bulk Plus Delivery"
 
     rate_lookup = {
         "Single": (45, 50, 2.00),
         "Double": (60, 70, 2.95),
         "Bulk": (55, 65, 2.65),
-        "Bulk Plus": (65, 80, 3.15)
+        "Bulk Plus": (65, 80, 3.05)
     }
     frank_min, lex_min, rate = rate_lookup[delivery_type]
-    base_fee = round(rate * mileage * 2, 2)
+    base_fee = round(rate * round_trip, 2)
     min_fee = frank_min if origin_choice == "Frankfort" else lex_min
     final_fee = max(base_fee, min_fee)
     if add_on:
         final_fee += 20
-    return mileage * 2, round(final_fee, 2)
+
+    return round_trip, round(final_fee, 2)
 
 if submit_quote and customer_address:
     mileage, quote = calculate_delivery_fee(origin_address, customer_address, delivery_type, add_on_option)
@@ -128,7 +134,8 @@ if st.session_state.get("quote_shown"):
     st.header("Step 2: Customer Info")
     customer_name = st.text_input("Customer Name")
     customer_phone = st.text_input("Phone Number")
-    customer_notes = st.text_area("Please list plants, materials, gate codes, or other notes")
+    delivery_details = st.text_area("Please list all plants, materials, and items to be delivered")
+    customer_notes = st.text_area("Delivery location, gate codes, or other notes")
 
     st.header("Step 3: Scheduling")
     today = date.today()
@@ -186,7 +193,7 @@ if st.session_state.get("quote_shown"):
             buffer.seek(0)
             return buffer
 
-        description = f"Quote: ${st.session_state.quote:.2f}\nName: {customer_name}\nPhone: {customer_phone}\nAddress: {customer_address}\nNotes: {customer_notes}"
+        description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
         event_link = create_google_calendar_event(
             summary=f"Delivery for {customer_name}",
             description=description,
