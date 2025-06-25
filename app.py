@@ -229,7 +229,7 @@ if st.session_state.get("quote_shown"):
             time_pref=time_pref
         )
 
-        pdf_buffer = create_pdf_filled()
+    pdf_buffer = create_pdf_filled()
         pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
 
         try:
