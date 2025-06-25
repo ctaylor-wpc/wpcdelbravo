@@ -20,6 +20,7 @@ from pdfrw import PdfWriter
 from pdfrw import PageMerge
 import fitz
 from datetime import date
+from datetime import datetime, timedelta
 
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
@@ -168,14 +169,9 @@ if st.session_state.get("quote_shown"):
     if st.button("Send Confirmation Email"):
 
         def create_google_calendar_event(summary, description, date_str, time_pref):
-            if time_pref == "Morning":
-                start_time = "09:00:00"
-            elif time_pref == "Afternoon":
-                start_time = "13:00:00"
-            else:
-                start_time = "12:00:00"
-            start = f"{date_str}T{start_time}-04:00"
-            end = f"{date_str}T{(datetime.strptime(start_time, '%H:%M:%S') + timedelta(hours=1)).strftime('%H:%M:%S')}-04:00"
+            start = {"date": date_str}
+            end_date = (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+            end = {"date": end_date}
 
             event = {
                 "summary": summary,
