@@ -230,7 +230,7 @@ if st.session_state.get("quote_shown"):
         )
 
     pdf_buffer = create_pdf_filled()
-        pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
+    pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
 
         try:
             msg = MIMEMultipart()
