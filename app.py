@@ -19,6 +19,7 @@ from pdfrw import PdfReader
 from pdfrw import PdfWriter
 from pdfrw import PageMerge
 import fitz
+from datetime import date
 
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
@@ -256,7 +257,7 @@ if st.session_state.get("quote_shown"):
 
             return output_buffer
 
-        description = f"CUSTOMER NAME: {customer_name}\nPHONE NUMBER: {customer_phone}\nDELIVERY ADDRESS: {customer_address}\n\nPLANTS AND MATERIALS: {delivery_details}\nNOTES: {customer_notes}\n\nQUOTE: ${st.session_state.quote:.2f}\nCASHIER: {cashier_initials}"
+        description = f"Customer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\n\nPlants and Materials: {delivery_details}\n\nNotes: {customer_notes}\n\nQuote: ${st.session_state.quote:.2f}\n\nCashier: {cashier_initials}\nDate: {date.today().strftime('%A, %B %d, %Y')}"
     
         event_link = create_google_calendar_event(
             summary=f"Delivery for {customer_name}",
