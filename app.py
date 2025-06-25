@@ -182,43 +182,43 @@ if st.session_state.get("quote_shown"):
 
         def create_pdf_field():
             template_path = "delivery_template.pdf"
-    output_buffer = io.BytesIO()
+            output_buffer = io.BytesIO()
 
-    ANNOT_KEY = "/Annots"
-    ANNOT_FIELD_KEY = "/T"
-    ANNOT_VAL_KEY = "/V"
-    ANNOT_RECT_KEY = "/Rect"
-    SUBTYPE_KEY = "/Subtype"
-    WIDGET_SUBTYPE_KEY = "/Widget"
+            ANNOT_KEY = "/Annots"
+            ANNOT_FIELD_KEY = "/T"
+            ANNOT_VAL_KEY = "/V"
+            ANNOT_RECT_KEY = "/Rect"
+            SUBTYPE_KEY = "/Subtype"
+            WIDGET_SUBTYPE_KEY = "/Widget"
 
-    data = {
-        "customer_name": customer_name,
-        "customer_phone": customer_phone,
-        "customer_address": customer_address,
-        "origin_choice": origin_choice,
-        "delivery_type": delivery_type,
-        "quote": f"${st.session_state.quote:.2f}",
-        "customer_notes": customer_notes,
-        "delivery_details": delivery_details,
-        "preferred_date": preferred_date.strftime('%A, %m/%d/%Y'),
-        "cashier_initials": cashier_initials
-    }
+            data = {
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                "customer_address": customer_address,
+                "origin_choice": origin_choice,
+                "delivery_type": delivery_type,
+                "quote": f"${st.session_state.quote:.2f}",
+                "customer_notes": customer_notes,
+                "delivery_details": delivery_details,
+                "preferred_date": preferred_date.strftime('%A, %m/%d/%Y'),
+                "cashier_initials": cashier_initials
+            }
 
-    template_pdf = PdfReader(template_path)
-    for page in template_pdf.pages:
-        annotations = page.get(ANNOT_KEY)
-        if annotations:
-            for annotation in annotations:
-                if annotation.get(SUBTYPE_KEY) == WIDGET_SUBTYPE_KEY:
-                    key = annotation.get(ANNOT_FIELD_KEY)
-                    if key:
-                        key_name = key[1:-1]  # strip parentheses
-                        if key_name in data:
-                            annotation.update({ANNOT_VAL_KEY: f"{data[key_name]}"})
+            template_pdf = PdfReader(template_path)
+            for page in template_pdf.pages:
+                annotations = page.get(ANNOT_KEY)
+                if annotations:
+                    for annotation in annotations:
+                        if annotation.get(SUBTYPE_KEY) == WIDGET_SUBTYPE_KEY:
+                            key = annotation.get(ANNOT_FIELD_KEY)
+                            if key:
+                                key_name = key[1:-1]  # strip parentheses
+                                if key_name in data:
+                                    annotation.update({ANNOT_VAL_KEY: f"{data[key_name]}"})
 
-    PdfWriter().write(output_buffer, template_pdf)
-    output_buffer.seek(0)
-    return output_buffer
+            PdfWriter().write(output_buffer, template_pdf)
+            output_buffer.seek(0)
+            return output_buffer
 
     description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
     
