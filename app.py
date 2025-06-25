@@ -221,7 +221,8 @@ if st.session_state.get("quote_shown"):
     return output_buffer
 
     description = f"Quote: ${st.session_state.quote:.2f}\nCustomer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\nPlants and Materials: {delivery_details}\nNotes: {customer_notes}"
-        event_link = create_google_calendar_event(
+    
+    event_link = create_google_calendar_event(
             summary=f"Delivery for {customer_name}",
             description=description,
             date_str=preferred_date.strftime('%Y-%m-%d'),
