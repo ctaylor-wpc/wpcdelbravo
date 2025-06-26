@@ -75,7 +75,10 @@ def reset_app():
 st.header("Step 1: Delivery Quote")
 
 with st.form(key="quote_form"):
-    customer_address = st.text_input("Customer Address")
+    customer_street = st.text_input("Street Address")
+    customer_city = st.text_input("City")
+    customer_zip = st.text_input("Zip Code")
+    customer_address = f"{customer_street}, {customer_city}, KY {customer_zip}"
     origin_choice = st.radio("Select Delivery Origin", ["Frankfort", "Lexington"])
     delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
     add_on_option = st.checkbox("To-The-Hole")
@@ -204,7 +207,9 @@ if st.session_state.get("quote_shown"):
             data = {
                 "customer_name": customer_name,
                 "customer_phone": customer_phone,
-                "customer_address": customer_address,
+                "customer_street": customer_street,
+                "customer_city": customer_city,
+                "customer_zip": customer_zip,
                 "origin_choice": origin_choice,
                 "delivery_type": delivery_type,
                 "quote": f"${st.session_state.quote:.2f}",
@@ -263,7 +268,7 @@ if st.session_state.get("quote_shown"):
         description = f"Customer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\n\nPlants and Materials: {delivery_details}\n\nNotes: {customer_notes}\n\nQuote: ${st.session_state.quote:.2f}\n\nCashier: {cashier_initials}\nDate: {date.today().strftime('%A, %B %d, %Y')}"
     
         event_link = create_google_calendar_event(
-            summary=f"Delivery for {customer_name}",
+            summary=f"Delivery: {customer_name}",
             description=description,
             date_str=preferred_date.strftime('%Y-%m-%d'),
             time_pref=time_pref
