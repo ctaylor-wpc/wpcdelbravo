@@ -169,17 +169,21 @@ if st.session_state.get("quote_shown"):
     if st.button("Send Confirmation Email"):
 
         def create_google_calendar_event(summary, description, date_str, time_pref):
-            start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-            end_date = start_date + timedelta(days=1)
+            try:
+                start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+                end_date = start_date + timedelta(days=1)
 
-            event = {
-                "summary": summary,
-                "description": description,
-                "start": {"date": str(start_date)},
-                "end": {"date": str(end_date)},
-            }
-            created = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
-            return created.get("htmlLink")
+                event = {
+                    "summary": summary,
+                    "description": description,
+                    "start": {"date": str(start_date)},
+                    "end": {"date": str(end_date)},
+                }
+                created = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
+                return created.get("htmlLink")
+            except Exception as e:
+                st.error(f"📅 Failed to create calendar event: {e}")
+                raise
 
         def create_pdf_filled():
             template_path = "delivery_template.pdf"
