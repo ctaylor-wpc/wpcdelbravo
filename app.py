@@ -99,7 +99,7 @@ def get_distance_miles(origin, destination):
     meters = data["rows"][0]["elements"][0]["distance"]["value"]
     return round(meters / 1609.34, 2)
 
-def calculate_delivery_fee(origin, destination, delivery_type, add_on):
+def calculate_delivery_fee(origin, destination, delivery_type, add_on, customer_city):
     mileage = get_distance_miles(origin, destination)
     if mileage is None:
         return None, None
@@ -107,12 +107,13 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
     round_trip = mileage * 2
 
     if delivery_type == "Simple":
-        if "Frankfort" in destination:
+        city_clean = customer_city.strip().lower()
+        if city_clean == "frankfort":
             return round_trip, 8.00
-        elif "Lexington" in destination:
+        elif city_clean == "lexington":
             return round_trip, 30.00
         else:
-            return None, None  # triggers error later: "Simple Delivery Available for Frankfort & Lexington only"
+            return None, "Simple Delivery Available in Frankfort & Lexington only"
      
     if add_on and delivery_type not in ["Double", "Bulk Plus"]:
         return None, "To the Hole Delivery Requires either Double or Bulk Plus Delivery"
@@ -133,7 +134,7 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on):
     return round_trip, round(final_fee, 2)
 
 if submit_quote and customer_address:
-    mileage, quote = calculate_delivery_fee(origin_address, customer_address, delivery_type, add_on_option)
+    mileage, quote = calculate_delivery_fee(origin_address, customer_address, delivery_type, add_on_option, customer_city)
     if quote is None:
         st.error("Unable to calculate quote for this address.")
     else:
