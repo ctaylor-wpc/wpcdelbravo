@@ -21,6 +21,7 @@ from pdfrw import PageMerge
 import fitz
 from datetime import date
 from datetime import datetime, timedelta
+from googleapiclient.errors import HttpError
 
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
@@ -179,10 +180,13 @@ if st.session_state.get("quote_shown"):
                     "start": {"date": str(start_date)},
                     "end": {"date": str(end_date)},
                 }
+
                 created = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
                 return created.get("htmlLink")
-            except Exception as e:
-                st.error(f"📅 Failed to create calendar event: {e}")
+
+            except HttpError as e:
+                st.error("📅 Google Calendar API error. See details in logs.")
+                st.text(e.content.decode())  # Shows actual error from Google in Streamlit output
                 raise
 
         def create_pdf_filled():
