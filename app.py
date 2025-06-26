@@ -80,7 +80,7 @@ with st.form(key="quote_form"):
     customer_zip = st.text_input("Zip Code")
     customer_address = f"{customer_street}, {customer_city}, KY {customer_zip}"
     origin_choice = st.radio("Select Delivery Origin", ["Frankfort", "Lexington"])
-    delivery_type = st.selectbox("Select Delivery Type", ["Simple", "Single", "Double", "Bulk", "Bulk Plus"])
+    delivery_type = st.selectbox("Select Delivery Type", ["Single", "Double", "Bulk", "Bulk Plus", "Simple"])
     add_on_option = st.checkbox("To-The-Hole")
     submit_quote = st.form_submit_button("Calculate Quote")
 
