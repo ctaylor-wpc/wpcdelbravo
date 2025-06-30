@@ -169,11 +169,9 @@ if st.session_state.get("quote_shown"):
     if label:
         st.markdown(f"<span style='color:{color}; font-weight:bold'>{label}</span>", unsafe_allow_html=True)
 
-    time_pref = st.radio("Preferred Delivery Time", ["Doesn't Matter", "Morning", "Afternoon"], index=0)
-
     if st.button("Send Confirmation Email"):
 
-        def create_google_calendar_event(summary, description, date_str, time_pref):
+        def create_google_calendar_event(summary, description, date_str):
             try:
                 start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 end_date = start_date + timedelta(days=1)
@@ -219,7 +217,6 @@ if st.session_state.get("quote_shown"):
                 "preferred_date": preferred_date.strftime('%A, %m/%d/%Y'),
                 "cashier_initials": cashier_initials,
                 "add_on_option": "To the Hole" if add_on_option else "No",
-                "time_preference": time_pref
             }
 
             def sanitize_for_pdf(value):
@@ -274,7 +271,6 @@ if st.session_state.get("quote_shown"):
             summary=f"Delivery: {customer_name}",
             description=description,
             date_str=preferred_date.strftime('%Y-%m-%d'),
-            time_pref=time_pref
         )
 
         pdf_buffer = create_pdf_filled()
