@@ -217,7 +217,9 @@ if st.session_state.get("quote_shown"):
                 "customer_notes": customer_notes,
                 "delivery_details": delivery_details,
                 "preferred_date": preferred_date.strftime('%A, %m/%d/%Y'),
-                "cashier_initials": cashier_initials
+                "cashier_initials": cashier_initials,
+                "add_on_option": "To the Hole" if add_on_option else "No",
+                "time_preference": time_pref
             }
 
             def sanitize_for_pdf(value):
@@ -300,19 +302,6 @@ if st.session_state.get("quote_shown"):
             b64_pdf = base64.b64encode(pdf_buffer.read()).decode()
             href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="{pdf_filename}" target="_blank">Download PDF Receipt</a>'
             st.markdown(href, unsafe_allow_html=True)
-
-            st.markdown(
-                f"""
-                <script>
-                function printPdf() {{
-                    const win = window.open("data:application/pdf;base64,{b64_pdf}", '_blank');
-                    win.print();
-                }}
-                </script>
-                <button onclick="printPdf()">Print PDF</button>
-                """,
-                unsafe_allow_html=True
-            )
 
             if st.button("Schedule another delivery"):
                 reset_app()
