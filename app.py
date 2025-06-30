@@ -161,8 +161,8 @@ if st.session_state.get("quote_shown"):
     weekday_labels = {
         0: ("Frankfort Area", "#545A35"),
         1: ("Frankfort Area", "#545A35"),
-        2: ("Frankfort Area", "#545A35"),
-        3: ("Lexington Area", "#9B6554"),
+        2: ("Lexington Area", "#9B6554"),
+        3: ("Frankfort Area", "#545A35"),
         4: ("Lexington Area", "#9B6554")
     }
     label, color = weekday_labels.get(preferred_date.weekday(), ("", ""))
@@ -216,7 +216,7 @@ if st.session_state.get("quote_shown"):
                 "delivery_details": delivery_details,
                 "preferred_date": preferred_date.strftime('%A, %m/%d/%Y'),
                 "cashier_initials": cashier_initials,
-                "add_on_option": "To the Hole" if add_on_option else "No",
+                "add_on_option": "Yes" if add_on_option else "No",
             }
 
             def sanitize_for_pdf(value):
@@ -265,7 +265,7 @@ if st.session_state.get("quote_shown"):
 
             return output_buffer
 
-        description = f"Customer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\n\nPlants and Materials: {delivery_details}\n\nNotes: {customer_notes}\n\nQuote: ${st.session_state.quote:.2f}\n\nCashier: {cashier_initials}\nDate: {date.today().strftime('%A, %B %d, %Y')}"
+        description = f"Customer Name: {customer_name}\nPhone Number: {customer_phone}\nDelivery Address: {customer_address}\n\nPlants and Materials: {delivery_details}\nTo The Hole?: {add_on_option}\n\nNotes: {customer_notes}\n\nQuote: ${st.session_state.quote:.2f}\n\nCashier: {cashier_initials}\nDate: {date.today().strftime('%A, %B %d, %Y')}"
     
         event_link = create_google_calendar_event(
             summary=f"Delivery: {customer_name}",
