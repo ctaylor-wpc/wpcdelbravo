@@ -113,10 +113,10 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on, customer_
         elif city_clean == "lexington":
             return round_trip, 30.00
         else:
-            return None, "Simple Delivery Available in Frankfort & Lexington only"
+            return None, None
      
     if add_on and delivery_type not in ["Double", "Bulk Plus"]:
-        return None, "To the Hole Delivery Requires either Double or Bulk Plus Delivery"
+        return None, None
 
     rate_lookup = {
         "Single": (45, 50, 2.00),
@@ -136,7 +136,7 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on, customer_
 if submit_quote and customer_address:
     mileage, quote = calculate_delivery_fee(origin_address, customer_address, delivery_type, add_on_option, customer_city)
     if quote is None:
-        st.error("Unable to calculate quote for this address.")
+        st.error("Unable to calculate quote. Check delivery type, address, & to-the-hole options.")
     else:
         st.session_state.quote_shown = True
         st.session_state.mileage = mileage
