@@ -172,6 +172,10 @@ if st.session_state.get("quote_shown"):
     if st.button("Send Confirmation Email"):
 
         def create_google_calendar_event(summary, description, date_str):
+            data = {
+                "add_on_option": "Yes" if add_on_option else "No",
+            }
+
             try:
                 start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
                 end_date = start_date + timedelta(days=1)
