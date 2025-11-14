@@ -36,19 +36,19 @@ DELIVERY_TYPES = {
         "pricing_type": "standard"
     },
     "Christmas Tree (7-8ft and smaller)": {
-        "minimum": 42,
+        "minimum": 35,
         "allows_to_the_hole": False,
         "pricing_type": "christmas_tree_small",
         "rate_per_mile": 1.20,
-        "setup_fee": 22.50
+        "setup_fee": 16.50
     },
     "Christmas Tree (8-9ft and larger)": {
-        "minimum": 66,
+        "minimum": 55,
         "allows_to_the_hole": False,
         "pricing_type": "christmas_tree_large",
         "first_20_miles_rate": 1.60,
         "after_20_miles_rate": 0.75,
-        "setup_fee": 50.50
+        "setup_fee": 30.50
     },
     "Simple": {
         # Simple type uses fixed pricing by city, not mileage-based
