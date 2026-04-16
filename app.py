@@ -10,6 +10,7 @@ import google.auth
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseUpload
 import io
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -17,35 +18,28 @@ import base64
 from pdfrw import PdfObject, PdfName, PdfReader, PdfWriter, PageMerge
 import fitz
 
-# Import delivery configuration
 from delivery_config import (
-    DELIVERY_TYPES, 
-    TO_THE_HOLE_FEE, 
+    DELIVERY_TYPES,
+    DELIVERY_TYPE_DESCRIPTIONS,
+    TO_THE_HOLE_FEE,
     ORIGIN_ADDRESSES,
     get_delivery_type_names,
+    get_delivery_types,
     is_to_the_hole_allowed,
     calculate_christmas_tree_small_price,
     calculate_christmas_tree_large_price,
-    calculate_standard_price
+    calculate_standard_price,
 )
 
 st.set_page_config(page_title="Delivery Quote Calculator", layout="centered")
 
-# Custom styling
 st.markdown("""
     <style>
-        body {
-            background-color: #FBF8F6;
-            color: #5e5e5e;
-        }
-        .stButton>button {
-            background-color: #545A35;
-            color: white;
-        }
+        body { background-color: #FBF8F6; color: #5e5e5e; }
+        .stButton>button { background-color: #545A35; color: white; }
     </style>
 """, unsafe_allow_html=True)
 
-# API and Email configuration from Streamlit secrets
 GOOGLE_MAPS_API_KEY = st.secrets["api"]["google_maps_api_key"]
 SMTP_SERVER = st.secrets["email"]["smtp_server"]
 SMTP_PORT = st.secrets["email"]["smtp_port"]
@@ -53,44 +47,41 @@ SENDER_EMAIL = st.secrets["email"]["sender_email"]
 SENDER_PASSWORD = st.secrets["email"]["sender_password"]
 NOTIFY_EMAIL = st.secrets["email"]["notify_email"]
 
-# Google Calendar setup
 SERVICE_ACCOUNT_INFO = json.loads(st.secrets["gcp"]["service_account_json"])
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SCOPES = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/drive",
+]
 CALENDAR_ID = "deliveries@wilsonnurseriesky.com"
+DRIVE_FOLDER_ID = "0ACXLltK4hDN_Uk9PVA"
 
 credentials = service_account.Credentials.from_service_account_info(
     SERVICE_ACCOUNT_INFO, scopes=SCOPES)
 calendar_service = build("calendar", "v3", credentials=credentials)
+drive_service = build("drive", "v3", credentials=credentials)
 
-# Initialize session state
 if "quote_shown" not in st.session_state:
     st.session_state.quote_shown = False
 
 def reset_app():
-    """Reset the entire application state"""
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()
 
 @st.cache_data(show_spinner=False)
 def get_distance_miles(origin, destination):
-    """Get distance in miles using Google Maps API"""
     url = f"https://maps.googleapis.com/maps/api/distancematrix/json?origins={origin}&destinations={destination}&key={GOOGLE_MAPS_API_KEY}"
     response = requests.get(url)
     data = response.json()
-    
     if data["status"] != "OK" or data["rows"][0]["elements"][0]["status"] != "OK":
         return None
-    
     meters = data["rows"][0]["elements"][0]["distance"]["value"]
     return round(meters / 1609.34, 2)
 
 def calculate_delivery_fee(origin, destination, delivery_type, add_on, customer_city):
-    """Calculate delivery fee based on type and distance"""
-    config = DELIVERY_TYPES[delivery_type]
+    config = get_delivery_types()[delivery_type]
     pricing_type = config.get("pricing_type", "standard")
-    
-    # Handle Simple delivery type (fixed pricing by city)
+
     if pricing_type == "simple":
         city_clean = customer_city.strip().lower()
         if city_clean == "frankfort":
@@ -101,59 +92,65 @@ def calculate_delivery_fee(origin, destination, delivery_type, add_on, customer_
             return mileage * 2 if mileage else None, config["lexington_price"]
         else:
             return None, None
-    
-    # Validate to-the-hole option
+
     if add_on and not is_to_the_hole_allowed(delivery_type):
         return None, None
-    
-    # Calculate mileage
+
     mileage = get_distance_miles(origin, destination)
     if mileage is None:
         return None, None
-    
+
     round_trip = mileage * 2
-    
-    # Calculate price based on pricing type
+
     if pricing_type == "christmas_tree_small":
         final_fee = calculate_christmas_tree_small_price(round_trip)
     elif pricing_type == "christmas_tree_large":
         final_fee = calculate_christmas_tree_large_price(round_trip)
     elif pricing_type == "standard":
-        # Determine origin name for minimum calculation
         origin_name = [k for k, v in ORIGIN_ADDRESSES.items() if v == origin][0]
         final_fee = calculate_standard_price(round_trip, delivery_type, origin_name)
     else:
         return None, None
-    
-    # Add to-the-hole fee if selected
+
     if add_on:
         final_fee += TO_THE_HOLE_FEE
-    
+
     return round_trip, round(final_fee, 2)
 
+def upload_pdf_to_drive(pdf_buffer, filename):
+    """Upload PDF to the shared Drive folder and return a view link."""
+    file_metadata = {
+        "name": filename,
+        "parents": [DRIVE_FOLDER_ID],
+    }
+    pdf_buffer.seek(0)
+    media = MediaIoBaseUpload(pdf_buffer, mimetype="application/pdf", resumable=False)
+    uploaded = drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id, webViewLink",
+        supportsAllDrives=True,
+    ).execute()
+    return uploaded.get("webViewLink")
+
 def create_google_calendar_event(summary, description, date_str):
-    """Create event on Google Calendar"""
     try:
         start_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         end_date = start_date + timedelta(days=1)
-
         event = {
             "summary": summary,
             "description": description,
             "start": {"date": str(start_date)},
             "end": {"date": str(end_date)},
         }
-
         created = calendar_service.events().insert(calendarId=CALENDAR_ID, body=event).execute()
         return created.get("htmlLink")
-
     except HttpError as e:
         st.error("📅 Google Calendar API error. See details in logs.")
         st.text(e.content.decode())
         raise
 
 def create_pdf_filled(data):
-    """Fill PDF template with delivery data"""
     template_path = "delivery_template.pdf"
     filled_path = "/tmp/filled_temp.pdf"
     output_buffer = io.BytesIO()
@@ -164,7 +161,6 @@ def create_pdf_filled(data):
     WIDGET_SUBTYPE_KEY = "/Widget"
 
     def sanitize_for_pdf(value):
-        """Clean value for PDF field insertion"""
         if not isinstance(value, str):
             value = str(value)
         return (
@@ -194,14 +190,13 @@ def create_pdf_filled(data):
 
     PdfWriter(filled_path, trailer=template_pdf).write()
 
-    # Flatten PDF fields
     doc = fitz.open(filled_path)
     for page in doc:
         widgets = page.widgets()
         if widgets:
             for widget in widgets:
                 widget.update()
-                widget.field_flags |= 1 << 0  # Set field to ReadOnly
+                widget.field_flags |= 1 << 0
     doc.save(output_buffer, deflate=True)
     output_buffer.seek(0)
 
@@ -218,28 +213,35 @@ with st.form(key="quote_form"):
     customer_city = st.text_input("City")
     customer_zip = st.text_input("Zip Code")
     customer_address = f"{customer_street}, {customer_city}, KY {customer_zip}"
-    
+
     origin_choice = st.radio("Select Delivery Origin", list(ORIGIN_ADDRESSES.keys()))
     delivery_type = st.selectbox("Select Delivery Type", get_delivery_type_names())
     add_on_option = st.checkbox("To-The-Hole")
-    
+
     submit_quote = st.form_submit_button("Calculate Quote")
+
+with st.expander("📋 Delivery Type Reference"):
+    for dtype, lines in DELIVERY_TYPE_DESCRIPTIONS.items():
+        if dtype not in get_delivery_types() and "Christmas" in dtype:
+            continue
+        st.markdown(f"**{dtype}**")
+        for line in lines:
+            st.markdown(f"- {line}")
 
 origin_address = ORIGIN_ADDRESSES[origin_choice]
 
 if submit_quote and customer_address:
-    # Validate to-the-hole option
     if add_on_option and not is_to_the_hole_allowed(delivery_type):
         st.error(f"'To-The-Hole' option is not available for {delivery_type} delivery type.")
     else:
         mileage, quote = calculate_delivery_fee(
-            origin_address, 
-            customer_address, 
-            delivery_type, 
-            add_on_option, 
-            customer_city
+            origin_address,
+            customer_address,
+            delivery_type,
+            add_on_option,
+            customer_city,
         )
-        
+
         if quote is None:
             st.error("Unable to calculate quote. Please check the address and try again.")
         else:
@@ -254,7 +256,6 @@ if submit_quote and customer_address:
             st.session_state.delivery_type = delivery_type
             st.session_state.add_on_option = add_on_option
 
-# Step 2 & 3: Show after quote is calculated
 if st.session_state.get("quote_shown"):
     st.success(f"💵 Delivery Quote: ${st.session_state.quote:.2f} (Roundtrip: {st.session_state.mileage} miles)")
 
@@ -268,17 +269,16 @@ if st.session_state.get("quote_shown"):
     cashier_initials = st.text_input("Your Initials")
     today = date.today()
     preferred_date = st.date_input("Preferred Delivery Date", min_value=today + timedelta(days=1))
-    
+
     if preferred_date.weekday() >= 5:
         st.warning("⚠️ Weekends are not available. Please select a weekday.")
 
-    # Show delivery area for selected date
     weekday_labels = {
         0: ("Frankfort Area", "#545A35"),
         1: ("Frankfort Area", "#545A35"),
         2: ("Lexington Area", "#9B6554"),
         3: ("Frankfort Area", "#545A35"),
-        4: ("Lexington Area", "#9B6554")
+        4: ("Lexington Area", "#9B6554"),
     }
     label, color = weekday_labels.get(preferred_date.weekday(), ("", ""))
     if label:
@@ -288,7 +288,6 @@ if st.session_state.get("quote_shown"):
         if not all([customer_name, customer_phone, delivery_details, cashier_initials]):
             st.error("Please fill in all required fields.")
         else:
-            # Prepare data for PDF
             pdf_data = {
                 "customer_name": customer_name,
                 "customer_phone": customer_phone,
@@ -305,32 +304,36 @@ if st.session_state.get("quote_shown"):
                 "add_on_option": "Yes" if st.session_state.add_on_option else "No",
             }
 
-            # Create calendar description
-            description = (
-                f"Customer Name: {customer_name}\n"
-                f"Phone Number: {customer_phone}\n"
-                f"Delivery Address: {st.session_state.customer_address}\n\n"
-                f"Plants and Materials: {delivery_details}\n"
-                f"To The Hole?: {st.session_state.add_on_option}\n\n"
-                f"Notes: {customer_notes}\n\n"
-                f"Quote: ${st.session_state.quote:.2f}\n\n"
-                f"Cashier: {cashier_initials}\n"
-                f"Date: {date.today().strftime('%A, %B %d, %Y')}"
-            )
-
             try:
-                # Create calendar event
+                pdf_buffer = create_pdf_filled(pdf_data)
+                pdf_filename = f"DELIVERY-{customer_name.replace(' ', '-')}-{preferred_date.strftime('%m-%d-%Y')}.pdf"
+
+                # Upload to Drive first so the link is ready for the calendar event
+                drive_link = upload_pdf_to_drive(pdf_buffer, pdf_filename)
+
+                description = (
+                    f"Customer Name: {customer_name}\n"
+                    f"Phone Number: {customer_phone}\n"
+                    f"Delivery Address: {st.session_state.customer_address}\n"
+                    f"Sold From: {st.session_state.origin_choice}\n\n"
+                    f"Plants and Materials: {delivery_details}\n"
+                    f"To The Hole?: {st.session_state.add_on_option}\n\n"
+                    f"Notes: {customer_notes}\n\n"
+                    f"Quote: ${st.session_state.quote:.2f}\n\n"
+                    f"Cashier: {cashier_initials}\n"
+                    f"Date: {date.today().strftime('%A, %B %d, %Y')}\n\n"
+                    f"PDF Receipt: {drive_link}"
+                )
+
                 event_link = create_google_calendar_event(
                     summary=f"Delivery: {customer_name}",
                     description=description,
                     date_str=preferred_date.strftime('%Y-%m-%d'),
                 )
 
-                # Create PDF
-                pdf_buffer = create_pdf_filled(pdf_data)
-                pdf_filename = f"DELIVERY-{preferred_date.strftime('%m-%d-%Y')}.pdf"
+                # Rewind buffer for email attachment (Drive upload consumed it)
+                pdf_buffer.seek(0)
 
-                # Send email
                 msg = MIMEMultipart()
                 msg["From"] = SENDER_EMAIL
                 msg["To"] = NOTIFY_EMAIL
@@ -348,7 +351,6 @@ if st.session_state.get("quote_shown"):
 
                 st.success("✅ Delivery Scheduled Successfully!")
 
-                # Provide PDF download
                 pdf_buffer.seek(0)
                 b64_pdf = base64.b64encode(pdf_buffer.read()).decode()
                 href = f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="{pdf_filename}" target="_blank">📥 Download PDF Receipt</a>'
